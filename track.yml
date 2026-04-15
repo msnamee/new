@@ -6,20 +6,20 @@ on:
   push:
     paths:
       - 'stocks/**'
-  workflow_dispatch:
+  workflow_dispatch: # 允许手动点击运行
 
 permissions:
-  contents: write
+  contents: write # 显式声明需要写权限
 
 jobs:
   track-process:
     runs-on: ubuntu-latest
     steps:
       - name: 检出代码
-        uses: actions/checkout@v4 # 升级到 v4 消灭警告
+        uses: actions/checkout@v4 # 升级到 v4 (消除 Node 警告)
 
       - name: 配置 Python 环境
-        uses: actions/setup-python@v5 # 升级到 v5 消灭警告
+        uses: actions/setup-python@v5 # 升级到 v5 (消除 Node 警告)
         with:
           python-version: '3.10'
 
@@ -34,36 +34,5 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add stocks/
-          # 检查是否有改动，有改动才执行 commit 和 push
-          git diff --quiet && git diff --staged --quiet || (git commit -m "🤖 自动更新个股追踪数据" && git push)name: 股票文件追踪系统
-
-on:
-  schedule:
-    - cron: '0 8 * * 1-5' # 北京时间 16:00 自动运行
-  push:
-    paths:
-      - 'stocks/**' # 只要 stocks 文件夹有新文件或改动，立即运行一次
-  workflow_dispatch:
-
-permissions:
-  contents: write
-
-jobs:
-  track-process:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
-      - name: 安装依赖
-        run: pip install requests
-      - name: 执行追踪逻辑
-        run: python tracker.py
-      - name: 自动提交更新
-        run: |
-          git config --global user.name "Stock-Bot"
-          git config --global user.email "bot@github.com"
-          git add stocks/
-          git diff --quiet && git diff --staged --quiet || git commit -m "🤖 自动更新个股追踪数据"
-          git push
+          # 只有在确实有文件改动时才执行 commit，防止因 commit 空内容导致报错退出
+          git diff --quiet && git diff --staged --quiet || (git commit -m "🤖 自动更新个股追踪数据" && git push)
