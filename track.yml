@@ -2,13 +2,13 @@ name: 股票文件追踪系统
 
 on:
   schedule:
-    - cron: '0 8 * * 1-5' # 北京时间 16:00 自动运行
+    - cron: '0 8 * * 1-5' # 北京时间 16:00 运行
   push:
     paths:
-      - 'stocks/**' # 只要 stocks 文件夹有变动就触发
-  workflow_dispatch: # 允许手动点击运行
+      - 'stocks/**'
+  workflow_dispatch: # 允许你手动点击按钮运行
 
-# 必须开启写入权限，否则会报 Exit Code 128
+# 显式声明写入权限（双重保险）
 permissions:
   contents: write
 
@@ -17,10 +17,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: 检出代码
-        uses: actions/checkout@v4 # 升级到 v4 以支持最新的 Node.js 环境
+        uses: actions/checkout@v4 # 已升级：消灭 Node 警告
 
       - name: 配置 Python 环境
-        uses: actions/setup-python@v5 # 升级到 v5 以支持最新的 Node.js 环境
+        uses: actions/setup-python@v5 # 已升级：消灭 Node 警告
         with:
           python-version: '3.10'
 
@@ -30,10 +30,15 @@ jobs:
       - name: 执行追踪逻辑
         run: python tracker.py
 
-      - name: 自动提交并发布更新
+      - name: 自动提交并推送更新
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add stocks/
-          # 检查是否有内容变化，只有在有变化时才提交，防止空提交报错
-          git diff --quiet && git diff --staged --quiet || (git commit -m "🤖 自动更新个股追踪数据" && git push)
+          # 检查是否有改动，有改动才 commit，避免空提交报错
+          if [ -n "$(git status --porcelain)" ]; then
+            git commit -m "🤖 自动更新个股追踪数据: $(date +'%Y-%m-%d')"
+            git push
+          else
+            echo "No changes to commit"
+          fi
