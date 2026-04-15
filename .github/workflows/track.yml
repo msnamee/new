@@ -1,44 +1,44 @@
-name: 股票每日追踪系统
+name: 股票文件追踪系统
 
 on:
-  # 每天世界协调时间 08:00 运行 (对应北京时间 16:00，刚好收盘后)
-  # 周一到周五运行 (1-5)
   schedule:
-    - cron: '0 8 * * 1-5'
-  
-  # 允许你在网页上点击按钮手动运行，方便随时测试或强制刷新
+    - cron: '0 8 * * 1-5' # 北京时间 16:00 自动运行
+  push:
+    paths:
+      - 'stocks/**'
   workflow_dispatch: 
 
-# 赋予自动推送代码的权限
+# 显式开启写入权限，解决 Exit code 128
 permissions:
   contents: write
 
 jobs:
-  track-stock:
+  track-process:
     runs-on: ubuntu-latest
-    
     steps:
-    - name: 检出代码
-      uses: actions/checkout@v3
+      - name: 检出代码
+        uses: actions/checkout@v4 # 已升级，消除警告
 
-    - name: 配置 Python 环境
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
+      - name: 配置 Python 环境
+        uses: actions/setup-python@v5 # 已升级，消除警告
+        with:
+          python-version: '3.10'
 
-    - name: 安装依赖模块
-      run: |
-        python -m pip install --upgrade pip
-        pip install requests
+      - name: 安装依赖模块
+        run: pip install requests
 
-    - name: 运行价格抓取与分析逻辑
-      run: python tracker.py
+      - name: 执行追踪逻辑
+        run: python tracker.py
 
-    - name: 自动提交并发布到仓库
-      run: |
-        git config --global user.name "GitHub-Tracker-Bot"
-        git config --global user.email "bot@github.com"
-        git add tracking.md state.json
-        # 如果文件有变化才提交，避免报错退出
-        git diff --quiet && git diff --staged --quiet || git commit -m "🤖 自动追踪更新: $(date +'%Y-%m-%d')"
-        git push
+      - name: 自动提交并发布更新
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add stocks/
+          # 只有发现 stocks/ 文件夹有变动时才提交，防止空提交报错
+          if [ -n "$(git status --porcelain stocks/)" ]; then
+            git commit -m "🤖 自动更新个股追踪数据"
+            git push
+          else
+            echo "没有发现数据变动，无需提交。"
+          fi
