@@ -2,13 +2,12 @@ name: 股票文件追踪系统
 
 on:
   schedule:
-    - cron: '0 8 * * 1-5' # 北京时间 16:00 自动运行
+    - cron: '0 8 * * 1-5' # 北京时间 16:00 运行
   push:
     paths:
-      - 'stocks/**' # 只要 stocks 文件夹有新文件就运行
-  workflow_dispatch: # 允许手动点击按钮运行
+      - 'stocks/**'
+  workflow_dispatch: 
 
-# 这里的 permissions 是代码层面的双保险
 permissions:
   contents: write
 
@@ -17,28 +16,28 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: 检出代码
-        uses: actions/checkout@v4 # 已升级到 v4，消灭 Node 警告
+        uses: actions/checkout@v4 # 必须是 v4
 
       - name: 配置 Python 环境
-        uses: actions/setup-python@v5 # 已升级到 v5，消灭 Node 警告
+        uses: actions/setup-python@v5 # 必须是 v5
         with:
           python-version: '3.10'
 
-      - name: 安装依赖
+      - name: 安装依赖模块
         run: pip install requests
 
       - name: 执行追踪逻辑
         run: python tracker.py
 
-      - name: 自动提交并发布更新
+      - name: 自动提交并发布到仓库
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add stocks/
-          # 检查是否有改动，有改动才提交，防止报错
+          # 如果没有变动，git commit 会返回 1 导致报错，这里加个判断
           if [ -n "$(git status --porcelain)" ]; then
-            git commit -m "🤖 自动更新个股追踪数据: $(date +'%Y-%m-%d')"
+            git commit -m "🤖 自动更新个股追踪数据"
             git push
           else
-            echo "没有发现任何数据变动，跳过提交。"
+            echo "没有数据变化，无需提交"
           fi
