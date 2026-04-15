@@ -2,13 +2,13 @@ name: 股票文件追踪系统
 
 on:
   schedule:
-    - cron: '0 8 * * 1-5' # 北京时间 16:00 自动运行
+    # 北京时间 15:05 运行 (15:05 - 8 = 07:05 UTC)
+    - cron: '5 7 * * 1-5'
   push:
     paths:
       - 'stocks/**'
   workflow_dispatch: 
 
-# 显式开启写入权限，解决 Exit code 128
 permissions:
   contents: write
 
@@ -17,10 +17,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: 检出代码
-        uses: actions/checkout@v4 # 已升级，消除警告
+        uses: actions/checkout@v4
 
       - name: 配置 Python 环境
-        uses: actions/setup-python@v5 # 已升级，消除警告
+        uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
@@ -35,9 +35,8 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add stocks/
-          # 只有发现 stocks/ 文件夹有变动时才提交，防止空提交报错
           if [ -n "$(git status --porcelain stocks/)" ]; then
-            git commit -m "🤖 自动更新个股追踪数据"
+            git commit -m "🤖 自动更新收盘追踪数据"
             git push
           else
             echo "没有发现数据变动，无需提交。"
