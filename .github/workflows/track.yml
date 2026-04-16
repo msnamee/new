@@ -41,20 +41,20 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           
-          # 修复 128 错误：使用 github.ref_name 动态获取当前分支名（兼容 main 和 master）
+          # 获取当前分支
           CURRENT_BRANCH="${{ github.ref_name }}"
           echo "当前操作分支: $CURRENT_BRANCH"
-          
-          # 确保当前在正确的分支上，并拉取最新代码防止冲突
           git checkout $CURRENT_BRANCH
-          git pull origin $CURRENT_BRANCH --rebase
           
-          # 添加所需追踪的目录
+          # 核心修复：先将 Python 脚本修改的文件暂存并提交！
           git add stocks/
           
           # 检查是否有文件变动
           if [ -n "$(git status --porcelain stocks/)" ]; then
             git commit -m "🤖 自动更新收盘追踪数据"
+            
+            # 提交到本地后，再进行拉取和推送，完美避开 128 冲突
+            git pull origin $CURRENT_BRANCH --rebase
             git push origin $CURRENT_BRANCH
             echo "✅ 数据已成功更新并推送到仓库。"
           else
