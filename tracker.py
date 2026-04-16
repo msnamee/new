@@ -9,29 +9,35 @@ tz_bj = timezone(timedelta(hours=8))
 today = datetime.now(tz_bj).strftime("%Y-%m-%d")
 
 def get_code_by_name(name):
-    """通过股票名称模糊搜索代码"""
+    """通过股票名称模糊搜索代码 (升级核心：采用腾讯智能搜索，彻底解决空白文件无法识别的问题)"""
     name = name.strip()
     try:
         encoded_name = urllib.parse.quote(name)
-        url = f"https://suggest3.sinajs.cn/suggest/type=&key={encoded_name}"
+        # 腾讯智能搜索接口，联想能力极强
+        url = f"http://smartbox.gtimg.cn/s3/?v=2&q={encoded_name}&t=all"
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0"}
         resp = requests.get(url, headers=headers, timeout=10)
-        data = resp.text.split('"')[1]
-        if not data: return None
         
-        items = data.split(';')
-        for item in items:
-            parts = item.split(',')
-            if len(parts) > 4 and (name in parts[0] or name in parts[4]):
-                market = parts[3].lower()
+        # 腾讯返回格式示例: v_hint="sz~002060~广东建工~gdjg~...^sh~...
+        if 'v_hint="' in resp.text:
+            data = resp.text.split('v_hint="')[1].split('"')[0]
+            if not data: return None
+            
+            # 截取第一个匹配项
+            first_match = data.split('^')[0]
+            parts = first_match.split('~')
+            
+            if len(parts) >= 2:
+                market = parts[0].lower() # sz 或 sh
+                code = parts[1]           # 002060
                 if market in ['sh', 'sz']:
-                    return market + parts[2]
+                    return market + code
     except Exception as e:
-        print(f"⚠️ 搜索 {name} 代码时异常: {e}")
+        print(f"⚠️ 腾讯搜索 {name} 代码时异常: {e}")
     return None
 
 def fetch_price(code):
-    """获取实时股价 (腾讯财经 API)"""
+    """获取实时股价 (腾讯财经行情 API)"""
     try:
         code = code.strip().lower()
         if code.isdigit() and len(code) == 6:
@@ -62,9 +68,9 @@ def process_file(filepath):
     filename = os.path.basename(filepath)
     stock_name_from_file = filename.replace('.md', '').strip()
     
-    # 修复核心BUG：兼容不同操作系统下创建文件的编码问题 (GBK / UTF-8 自动切换)
     content = ""
     try:
+        # 如果是刚创建的完全空白文件，这里读出来的 content 就是 ""
         with open(filepath, 'r', encoding='utf-8') as f:
             content = f.read()
     except UnicodeDecodeError:
@@ -72,7 +78,7 @@ def process_file(filepath):
         with open(filepath, 'r', encoding='gbk') as f:
             content = f.read()
 
-    # 1. 识别代码
+    # 1. 识别代码：如果文件内容为空，正则必败，将直接走最新升级的 get_code_by_name(腾讯搜索)
     match = re.search(r'[Cc]ode[：:]?\s*(s[hz]\d{6}|\d{6})', content)
     if match:
         code = match.group(1)
@@ -80,7 +86,7 @@ def process_file(filepath):
         code = get_code_by_name(stock_name_from_file)
     
     if not code:
-        print(f"❌ [{stock_name_from_file}] 无法识别股票代码，已跳过。")
+        print(f"❌ [{stock_name_from_file}] 无法识别股票代码，已跳过。请尝试在文件名加上代码，或在文件第一行写上 Code: 代码。")
         return
 
     # 2. 获取现价
@@ -90,7 +96,7 @@ def process_file(filepath):
         return
 
     # 3. 检查是否追踪结束
-    lines = content.strip().split('\n')
+    lines = content.strip().split('\n') if content.strip() else []
     data_lines = [l for l in lines if '|' in l and ('202' in l or '初始' in l)]
     if len(data_lines) >= 12: 
         print(f"✅ [{real_name}] 已完成追踪周期，不再更新。")
@@ -106,7 +112,7 @@ def process_file(filepath):
         header += "| :---: | :---: | :---: | :---: |\n"
         header += f"| 初始 | {today} | {price} | 0.00% |\n"
         new_content = header
-        print(f"✨ [{real_name}] 首次初始化追踪文档成功。")
+        print(f"✨ [{real_name}] 首次初始化追踪文档成功 (智能识别代码: {code})。")
     else:
         if today in content:
             print(f"⏩ [{real_name}] 今日数据 ({today}) 已存在，跳过。")
@@ -119,7 +125,6 @@ def process_file(filepath):
             
         start_price = float(start_price_match.group(1))
         
-        # 修复严重崩溃BUG：防止初始价格为0导致除以零错误
         if start_price <= 0:
              print(f"❌ [{real_name}] 初始价格为 {start_price}，无法进行收益率运算，已跳过！")
              return
@@ -130,7 +135,6 @@ def process_file(filepath):
         new_content = content.strip() + "\n" + new_row
         print(f"📈 [{real_name}] 成功追加第 {day_num} 天收益记录 ({total_return:+.2f}%)。")
 
-    # 统一用 utf-8 写回，规避后续再次出现编码冲突
     with open(filepath, 'w', encoding='utf-8') as f:
         f.write(new_content)
 
@@ -141,20 +145,18 @@ if __name__ == "__main__":
     
     print(f"=== 启动收盘追踪程序 (北京时间: {today}) ===")
     
-    # 获取目录下的所有 md 文件
     md_files = [f for f in os.listdir(folder) if f.endswith('.md')]
     
     if not md_files:
          print("📭 stocks 目录下没有找到任何 .md 文件。")
     
-    # 隔离化处理：无论哪个文件抛出异常，都不会导致整个程序崩溃
     for filename in md_files:
         filepath = os.path.join(folder, filename)
         try:
             process_file(filepath)
         except Exception as e:
             print(f"🚨 严重异常！在处理 [{filename}] 时发生崩溃：")
-            traceback.print_exc() # 打印确切的崩溃堆栈到日志中
+            traceback.print_exc()
             print("-" * 40)
             
     print("=== 追踪程序执行完毕 ===")
