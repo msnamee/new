@@ -7,7 +7,7 @@ on:
   push:
     paths:
       - 'stocks/**'
-      - 'tracker.py' # 当脚本本身更新时也触发测试
+      - 'tracker.py'
   workflow_dispatch: 
 
 permissions:
@@ -20,13 +20,13 @@ jobs:
       - name: 检出代码
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # 获取完整历史，防止后续 push 时产生 detached head 冲突
+          fetch-depth: 0
 
       - name: 配置 Python 环境
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-          cache: 'pip' # 加入缓存加速后续依赖安装
+          # 已移除 cache: 'pip'，解决无 requirements.txt 的报错问题
 
       - name: 安装依赖模块
         run: |
@@ -42,15 +42,15 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           
-          # 避免远端有新提交导致当前 push 失败
+          # 避免远端有新提交导致当前 push 失败，先变基拉取
           git pull origin main --rebase
           
-          # 仅添加 stocks 目录，如果你有其他目录需要追踪，请在这里增加，比如 git add data/
+          # 添加所需追踪的目录
           git add stocks/
           
           # 检查是否有文件变动
           if [ -n "$(git status --porcelain stocks/)" ]; then
-            git commit -m "🤖 自动更新收盘追踪数据 (北京时间 15:13)"
+            git commit -m "🤖 自动更新收盘追踪数据"
             git push
             echo "✅ 数据已成功更新并推送到仓库。"
           else
